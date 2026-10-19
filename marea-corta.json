@@ -1,0 +1,91 @@
+{
+  "title": "Marea corta",
+  "seconds": 10,
+  "seed": 11,
+  "events": [
+    {
+      "note": "A4",
+      "start": 0.16,
+      "bow": 0.64,
+      "vel": 0.76
+    },
+    {
+      "note": "F4",
+      "start": 0.82,
+      "bow": 0.36,
+      "vel": 0.62
+    },
+    {
+      "note": "D4",
+      "start": 1.2,
+      "bow": 0.74,
+      "vel": 0.84
+    },
+    {
+      "note": "A3",
+      "start": 1.98,
+      "bow": 0.9,
+      "vel": 0.7
+    },
+    {
+      "note": "C4",
+      "start": 2.94,
+      "bow": 0.4,
+      "vel": 0.64
+    },
+    {
+      "note": "D4",
+      "start": 3.4,
+      "bow": 0.5,
+      "vel": 0.8
+    },
+    {
+      "note": "F4",
+      "start": 3.96,
+      "bow": 0.46,
+      "vel": 0.72
+    },
+    {
+      "note": "A4",
+      "start": 4.48,
+      "bow": 0.6,
+      "vel": 0.88
+    },
+    {
+      "note": "C5",
+      "start": 5.14,
+      "bow": 1.02,
+      "vel": 0.94
+    },
+    {
+      "note": "A4",
+      "start": 6.22,
+      "bow": 0.46,
+      "vel": 0.68
+    },
+    {
+      "note": "F4",
+      "start": 6.72,
+      "bow": 0.4,
+      "vel": 0.58
+    },
+    {
+      "note": "D4",
+      "start": 7.18,
+      "bow": 1.12,
+      "vel": 0.78
+    },
+    {
+      "note": "A3",
+      "start": 8.4,
+      "bow": 0.36,
+      "vel": 0.5
+    },
+    {
+      "note": "D4",
+      "start": 8.84,
+      "bow": 1.0,
+      "vel": 0.6
+    }
+  ]
+}
