@@ -78,13 +78,17 @@ Para imponer una melodía, pasa este objeto a `filandria.render` o a `play`:
 
 Si el JSON no cumple el contrato, el programa termina con código 2 y escribe `error: ...` en stderr. No genera wav.
 
-## Filamentos cromáticos (nuevo)
+## Doce filamentos con clavijas de cobre (nuevo)
 
-La Filandria ahora tiene un segundo juego de hilos de vidrio, del mismo timbre (mismo arco, misma membrana, misma madera): **un hilo por semitono de F1 a F6**, afinados en temperamento igual con **A4 = 440 Hz**. Cubre de sobra B♭2–C6 y el registro grave hasta F1/B♭1. Los hilos graves suenan más oscuros y largos. Los agudos tienen más brillo.
+![La Filandria de doce filamentos](filandria_12.jpg)
 
-El modo original de nueve hilos (escala de marea) sigue siendo el **predeterminado**: un JSON sin `"tuning"` suena exactamente igual que antes, bit a bit.
+La Filandria tiene ahora **solo doce hilos de vidrio, uno por cada clase de altura** (C, C#, D, D#, E, F, F#, G, G#, A, A#, B). Cada hilo lleva una **clavija de tensión de cobre** que lo sube o baja de octava, así que los doce hilos cubren todos los semitonos de **F1 a F6**, afinados en temperamento igual con **A4 = 440 Hz**. El timbre es el mismo: mismo arco de crin, misma membrana ahumada, misma madera de olivo. Con la clavija en las octavas graves el hilo suena más oscuro y largo; en las agudas, más brillante.
 
-Para usar los hilos nuevos, añade `"tuning": "cromatica"` y escribe las notas con nombre (`"Bb4"`, `"A#4"`, `"Eb2"`, `"F1"`) o número MIDI (29–89):
+El modo original de nueve hilos (escala de marea) sigue siendo el **predeterminado**: un JSON sin `"tuning"` suena exactamente igual que antes, bit a bit. La API y el sonido no cambian.
+
+![La Filandria original de nueve hilos](filandria.jpg)
+
+Para usar los doce hilos, añade `"tuning": "cromatica"` y escribe las notas con nombre (`"Bb4"`, `"A#4"`, `"Eb2"`, `"F1"`) o número MIDI (29–89):
 
 ```json
 {
@@ -111,4 +115,4 @@ Ya **no hay límite de duración ni de número de eventos**, y el arco puede dur
 ## Himno Nacional Mexicano
 
 - [`himno_mexicano/`](himno_mexicano/): v1, arreglo pentatónico aproximado en los nueve hilos.
-- [`himno_mexicano/v2/`](himno_mexicano/v2/): v2, versión fiel en **si bemol mayor** con armonía y bajo, en los hilos cromáticos y en un solo render. WAV y MP4 están en el release `himno-mexicano-v2`.
+- [`himno_mexicano/v2/`](himno_mexicano/v2/): v2, versión fiel en **si bemol mayor** con armonía y bajo, en los doce hilos con clavijas y en un solo render. WAV y MP4 están en el release `himno-mexicano-v2`.

@@ -30,8 +30,10 @@ seed   integer, changes bow noise only; the same seed is the same take
 
 Chromatic mode (new filaments)
 ------------------------------
-Add "tuning": "cromatica" to the melody to bow the extended set of glass
-filaments: every semitone from F1 to F6, A4 = 440 Hz equal temperament.
+Add "tuning": "cromatica" to the melody to bow the twelve glass filaments,
+one per pitch class (C, C#, D ... B). Each filament has a copper tension peg
+that shifts its octave, so together they cover every semitone from F1 to F6,
+A4 = 440 Hz equal temperament. Same timbre, bow, skin and olive wood.
 Notes are names like "Bb4", "A#4", "Eb2", "F1" (or MIDI numbers 29..89).
 Optional keys (chromatic and marea):
   "drone": "fixed" (default, D2/A2 skin) | "off" |
