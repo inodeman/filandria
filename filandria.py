@@ -27,6 +27,20 @@ vel    0.05 to 1
 events at most 64, in any order
 seconds 4 to 60
 seed   integer, changes bow noise only; the same seed is the same take
+
+Chromatic mode (new filaments)
+------------------------------
+Add "tuning": "cromatica" to the melody to bow the extended set of glass
+filaments: every semitone from F1 to F6, A4 = 440 Hz equal temperament.
+Notes are names like "Bb4", "A#4", "Eb2", "F1" (or MIDI numbers 29..89).
+Optional keys (chromatic and marea):
+  "drone": "fixed" (default, D2/A2 skin) | "off" |
+           [{"start": 0, "root": "Bb1", "fifth": "F2"}, ...]  (follows harmony)
+  "drone_level": float, default 1.0 (0 silences the skin)
+  "gain": float, default 1.0, scales the bowed filaments before the mix
+Per event: "breath": false keeps that note out of the breath layer
+(use it for harmony/bass so the air follows the melody).
+There is no limit on seconds or number of events; bow up to 30 s.
 """
 from __future__ import annotations
 
@@ -54,6 +68,38 @@ SCALE = {
 }
 DRONE = {"D2": 73.08, "A2": 109.15}
 ORDER = ["D3", "F3", "G3", "A3", "C4", "D4", "F4", "A4", "C5"]
+
+# Filamentos cromaticos: F1..F6, A4 = 440 Hz equal temperament.
+CHROMA_LOW, CHROMA_HIGH = 29, 89  # MIDI F1 .. F6
+_PC = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+
+
+def note_to_midi(note) -> int:
+    """'Bb4' / 'A#4' / 'Eb2' / 60 -> MIDI number."""
+    if isinstance(note, (int, np.integer)) and not isinstance(note, bool):
+        return int(note)
+    if not isinstance(note, str) or len(note) < 2 or note[0].upper() not in _PC:
+        raise MelodyError(f"bad note name {note!r}")
+    pc = _PC[note[0].upper()]
+    rest = note[1:]
+    while rest and rest[0] in "#b":
+        pc += 1 if rest[0] == "#" else -1
+        rest = rest[1:]
+    try:
+        octave = int(rest)
+    except ValueError as exc:
+        raise MelodyError(f"bad note name {note!r}") from exc
+    return 12 * (octave + 1) + pc
+
+
+def chroma_hz(note) -> float:
+    m = note_to_midi(note)
+    if not CHROMA_LOW <= m <= CHROMA_HIGH:
+        raise MelodyError(f"note {note!r} is outside the chromatic filaments F1..F6")
+    return 440.0 * 2.0 ** ((m - 69) / 12.0)
+
+
+CHROMATIC = {m: 440.0 * 2.0 ** ((m - 69) / 12.0) for m in range(CHROMA_LOW, CHROMA_HIGH + 1)}
 
 # The first phrase, kept so a bot can replay the original take.
 MAREA_CORTA = {
@@ -90,23 +136,28 @@ def validate(melody: dict) -> dict:
         seconds = float(melody["seconds"])
     except (KeyError, TypeError, ValueError) as exc:
         raise MelodyError("seconds must be a number") from exc
-    if not 4 <= seconds <= 60:
-        raise MelodyError("seconds must be between 4 and 60")
+    tuning = str(melody.get("tuning", "marea"))
+    if tuning not in ("marea", "cromatica"):
+        raise MelodyError("tuning must be 'marea' or 'cromatica'")
+    if not 1 <= seconds:
+        raise MelodyError("seconds must be at least 1")
     seed = int(melody.get("seed", 1))
     events_in = melody.get("events")
     if not isinstance(events_in, list) or not events_in:
         raise MelodyError("events must be a non-empty list")
-    if len(events_in) > 64:
-        raise MelodyError("at most 64 events")
     events = []
     for i, event in enumerate(events_in):
         if not isinstance(event, dict):
             raise MelodyError(f"event {i} must be an object")
         note = event.get("note")
-        if note not in SCALE:
+        if tuning == "cromatica":
+            hz = chroma_hz(note)
+        elif note not in SCALE:
             raise MelodyError(
                 f"event {i} note {note!r} is not playable; use one of {ORDER}"
             )
+        else:
+            hz = SCALE[note]
         try:
             start = float(event["start"])
             bow = float(event["bow"])
@@ -115,8 +166,8 @@ def validate(melody: dict) -> dict:
             raise MelodyError(f"event {i} needs numeric start, bow and vel") from exc
         if start < 0 or start >= seconds:
             raise MelodyError(f"event {i} start must be >= 0 and < seconds")
-        if not 0.08 <= bow <= 4:
-            raise MelodyError(f"event {i} bow must be between 0.08 and 4 seconds")
+        if not 0.08 <= bow <= 30:
+            raise MelodyError(f"event {i} bow must be between 0.08 and 30 seconds")
         if not 0.05 <= vel <= 1:
             raise MelodyError(f"event {i} vel must be between 0.05 and 1")
         events.append(
@@ -125,15 +176,38 @@ def validate(melody: dict) -> dict:
                 "start": round(start, 4),
                 "bow": round(bow, 4),
                 "vel": round(vel, 4),
+                "hz": hz,
+                "breath": bool(event.get("breath", True)),
             }
         )
     events.sort(key=lambda e: e["start"])
-    return {
+    drone = melody.get("drone", "fixed")
+    if isinstance(drone, list):
+        changes = []
+        for j, ch in enumerate(drone):
+            try:
+                root = chroma_hz(ch["root"]) if not isinstance(ch["root"], float) else ch["root"]
+                fifth = ch.get("fifth")
+                fifth = root * 1.5 if fifth is None else chroma_hz(fifth)
+                changes.append((float(ch.get("start", 0)), root, fifth))
+            except (KeyError, TypeError) as exc:
+                raise MelodyError(f"drone change {j} needs start and root") from exc
+        if not changes:
+            raise MelodyError("drone list must not be empty")
+        drone = sorted(changes)
+    elif drone not in ("fixed", "off"):
+        raise MelodyError("drone must be 'fixed', 'off' or a list of changes")
+    out = {
         "title": str(melody.get("title") or "sin-titulo"),
         "seconds": seconds,
         "seed": seed,
         "events": events,
+        "tuning": tuning,
+        "drone": drone,
+        "drone_level": float(melody.get("drone_level", 1.0)),
+        "gain": float(melody.get("gain", 1.0)),
     }
+    return out
 
 
 def compose(seconds: float = 10.0, seed: int = 1, title: str | None = None) -> dict:
@@ -180,14 +254,27 @@ def compose(seconds: float = 10.0, seed: int = 1, title: str | None = None) -> d
             "vel": 0.62,
         }
     )
-    return validate(
+    return _public(validate(
         {
             "title": title or f"frase-{int(seed)}",
             "seconds": float(seconds),
             "seed": int(seed),
             "events": events,
         }
-    )
+    ))
+
+
+def _public(m: dict) -> dict:
+    """Validated melody back to the original JSON shape (marea defaults hidden)."""
+    out = {"title": m["title"], "seconds": m["seconds"], "seed": m["seed"],
+           "events": [{k: e[k] for k in ("note", "start", "bow", "vel")} for e in m["events"]]}
+    return out
+
+
+try:  # fast, numerically equivalent filters; pure-python fallback below
+    from scipy.signal import lfilter as _lfilter
+except ImportError:  # pragma: no cover
+    _lfilter = None
 
 
 def _biquad_bandpass(x: np.ndarray, f0: float, q: float, sr: int) -> np.ndarray:
@@ -198,6 +285,8 @@ def _biquad_bandpass(x: np.ndarray, f0: float, q: float, sr: int) -> np.ndarray:
     a0, a1, a2 = 1.0 + alpha, -2.0 * cw, 1.0 - alpha
     b0, b1, b2 = b0 / a0, b1 / a0, b2 / a0
     a1, a2 = a1 / a0, a2 / a0
+    if _lfilter is not None:
+        return _lfilter([b0, b1, b2], [1.0, a1, a2], x)
     y = np.empty_like(x)
     x1 = x2 = y1 = y2 = 0.0
     for i, xn in enumerate(x):
@@ -218,6 +307,8 @@ def _biquad_lowpass(x: np.ndarray, f0: float, q: float, sr: int) -> np.ndarray:
     a0, a1, a2 = 1.0 + alpha, -2.0 * cw, 1.0 - alpha
     b0, b1, b2 = b0 / a0, b1 / a0, b2 / a0
     a1, a2 = a1 / a0, a2 / a0
+    if _lfilter is not None:
+        return _lfilter([b0, b1, b2], [1.0, a1, a2], x)
     y = np.empty_like(x)
     x1 = x2 = y1 = y2 = 0.0
     for i, xn in enumerate(x):
@@ -289,11 +380,29 @@ def _glass_note(f: float, bow: float, vel: float, sr: int, rng: np.random.Genera
     return (sig * env * vel).astype(np.float64)
 
 
-def _drone(n: int, sr: int, dur: float, rng: np.random.Generator) -> np.ndarray:
+def _drone(n: int, sr: int, dur: float, rng: np.random.Generator, changes=None) -> np.ndarray:
     t = np.arange(n) / sr
-    d, a = DRONE["D2"], DRONE["A2"]
-    fund = np.sin(2 * np.pi * d * t) + 0.65 * np.sin(2 * np.pi * d * 1.004 * t + 0.4)
-    fifth = 0.42 * np.sin(2 * np.pi * a * t + 1.1) + 0.2 * np.sin(2 * np.pi * a * 0.997 * t)
+    if changes is None:
+        d, a = DRONE["D2"], DRONE["A2"]
+        fund = np.sin(2 * np.pi * d * t) + 0.65 * np.sin(2 * np.pi * d * 1.004 * t + 0.4)
+        fifth = 0.42 * np.sin(2 * np.pi * a * t + 1.1) + 0.2 * np.sin(2 * np.pi * a * 0.997 * t)
+    else:
+        # The skin is re-tensioned: root/fifth glide (~80 ms) to follow the harmony.
+        d = np.full(n, changes[0][1])
+        a = np.full(n, changes[0][2])
+        for start, root, fif in changes:
+            i0 = max(0, int(start * sr))
+            d[i0:] = root
+            a[i0:] = fif
+        k = np.hanning(max(3, int(0.08 * sr)))
+        k /= k.sum()
+        pad = len(k)
+        d = np.convolve(np.pad(d, pad, mode="edge"), k, mode="same")[pad:-pad]
+        a = np.convolve(np.pad(a, pad, mode="edge"), k, mode="same")[pad:-pad]
+        pd = 2 * np.pi * np.cumsum(d) / sr
+        pa = 2 * np.pi * np.cumsum(a) / sr
+        fund = np.sin(pd) + 0.65 * np.sin(pd * 1.004 + 0.4)
+        fifth = 0.42 * np.sin(pa + 1.1) + 0.2 * np.sin(pa * 0.997)
     tide = 0.72 + 0.28 * np.sin(2 * np.pi * 0.18 * t - 0.6)
     air = _biquad_lowpass(rng.standard_normal(n), 180.0, 0.7, sr)
     air = _biquad_lowpass(air, 180.0, 0.7, sr)
@@ -322,6 +431,18 @@ def _early(x: np.ndarray, sr: int) -> np.ndarray:
 
 
 def _comb(x: np.ndarray, delay: int, feedback: float, damp: float) -> np.ndarray:
+    if _lfilter is not None:
+        n = len(x)
+        y = np.zeros(n)
+        w = np.zeros(n)
+        zi = np.zeros(1)
+        for k in range(0, n, delay):
+            e = min(n, k + delay)
+            if k >= delay:
+                y[k:e] = w[k - delay : e - delay]
+            lp, zi = _lfilter([1.0 - damp], [1.0, -damp], y[k:e], zi=zi)
+            w[k:e] = x[k:e] + lp * feedback
+        return y
     buf = np.zeros(delay)
     y = np.empty_like(x)
     idx = 0
@@ -338,6 +459,16 @@ def _comb(x: np.ndarray, delay: int, feedback: float, damp: float) -> np.ndarray
 
 
 def _allpass(x: np.ndarray, delay: int, g: float) -> np.ndarray:
+    if _lfilter is not None:
+        n = len(x)
+        d = np.zeros(n)
+        w = np.zeros(n)
+        for k in range(0, n, delay):
+            e = min(n, k + delay)
+            if k >= delay:
+                d[k:e] = w[k - delay : e - delay]
+            w[k:e] = x[k:e] + d[k:e] * g
+        return d - g * x
     buf = np.zeros(delay)
     y = np.empty_like(x)
     idx = 0
@@ -377,13 +508,15 @@ def render(melody: dict, sr: int = SR) -> np.ndarray:
     pitch = np.zeros(n)
     amp = np.zeros(n)
     for event in melody["events"]:
-        sig = _glass_note(SCALE[event["note"]], event["bow"], event["vel"], sr, rng)
+        sig = _glass_note(event["hz"], event["bow"], event["vel"], sr, rng)
         i0 = int(event["start"] * sr)
-        _place(glass, i0, sig)
+        _place(glass, i0, sig * melody["gain"])
+        if not event["breath"]:
+            continue
         i1 = min(n, i0 + int((event["bow"] + 0.15) * sr))
         if i1 <= i0:
             continue
-        pitch[i0:i1] = SCALE[event["note"]]
+        pitch[i0:i1] = event["hz"]
         window = np.sin(np.linspace(0, np.pi, i1 - i0)) ** 0.6
         amp[i0:i1] = np.maximum(amp[i0:i1], event["vel"] * window)
     last = SCALE["A4"]
@@ -395,7 +528,13 @@ def render(melody: dict, sr: int = SR) -> np.ndarray:
     kernel = np.hanning(max(3, int(0.06 * sr)))
     kernel /= kernel.sum()
     amp_s = np.convolve(amp, kernel, mode="same")
-    drone = _drone(n, sr, seconds, rng)
+    if melody["drone"] == "off":
+        _drone(min(n, 16), sr, seconds, rng)  # keep the noise stream identical
+        drone = np.zeros(n)
+    elif melody["drone"] == "fixed":
+        drone = _drone(n, sr, seconds, rng) * melody["drone_level"]
+    else:
+        drone = _drone(n, sr, seconds, rng, melody["drone"]) * melody["drone_level"]
     breath = _breath(pitch, amp_s, sr, rng)
     wood = _biquad_bandpass(glass, 280.0, 1.0, sr) * 0.05
     dry = glass + wood
@@ -459,7 +598,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.cmd == "notes":
-            payload = {"playable": SCALE, "order": ORDER, "drone_only": DRONE, "sample_rate": SR}
+            payload = {"playable": SCALE, "order": ORDER, "drone_only": DRONE, "sample_rate": SR,
+                       "cromatica": {"range": ["F1", "F6"], "a4_hz": 440.0}}
             text = json.dumps(payload, indent=2)
             if args.out:
                 args.out.write_text(text + "\n", encoding="utf-8")

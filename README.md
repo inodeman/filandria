@@ -77,3 +77,38 @@ Para imponer una melodía, pasa este objeto a `filandria.render` o a `play`:
 - `events`: de 1 a 64. El orden no importa.
 
 Si el JSON no cumple el contrato, el programa termina con código 2 y escribe `error: ...` en stderr. No genera wav.
+
+## Filamentos cromáticos (nuevo)
+
+La Filandria ahora tiene un segundo juego de hilos de vidrio, del mismo timbre (mismo arco, misma membrana, misma madera): **un hilo por semitono de F1 a F6**, afinados en temperamento igual con **A4 = 440 Hz**. Cubre de sobra B♭2–C6 y el registro grave hasta F1/B♭1. Los hilos graves suenan más oscuros y largos. Los agudos tienen más brillo.
+
+El modo original de nueve hilos (escala de marea) sigue siendo el **predeterminado**: un JSON sin `"tuning"` suena exactamente igual que antes, bit a bit.
+
+Para usar los hilos nuevos, añade `"tuning": "cromatica"` y escribe las notas con nombre (`"Bb4"`, `"A#4"`, `"Eb2"`, `"F1"`) o número MIDI (29–89):
+
+```json
+{
+  "title": "Prueba", "tuning": "cromatica", "seconds": 8, "seed": 1,
+  "gain": 0.5,
+  "drone": [{"start": 0, "root": "Bb1", "fifth": "F2"}, {"start": 4, "root": "F1"}],
+  "drone_level": 0.6,
+  "events": [
+    {"note": "F5", "start": 0.3, "bow": 0.7, "vel": 0.8},
+    {"note": "Bb2", "start": 0.3, "bow": 3.5, "vel": 0.4, "breath": false}
+  ]
+}
+```
+
+Opciones nuevas (sirven en los dos modos):
+
+- `drone`: `"fixed"` (predeterminado, el zumbido D2/A2 de siempre), `"off"` (membrana en silencio) o una lista de cambios `{"start", "root", "fifth"?}`. Con la lista, la membrana se retensa y sigue la armonía con un deslizamiento de unos 80 ms. Si no das `fifth`, se usa la quinta justa.
+- `drone_level`: volumen de la membrana (1.0 por defecto, 0 la apaga).
+- `gain`: escala los hilos frotados antes de la mezcla. Conviene bajarlo con muchas voces.
+- `breath: false` en un evento: esa nota no mueve la capa de aire, así el aliento sigue a la melodía y no al bajo.
+
+Ya **no hay límite de duración ni de número de eventos**, y el arco puede durar hasta 30 s. Si hay `scipy`, los filtros van mucho más rápido (con el mismo resultado). Sin `scipy` se usan los bucles originales.
+
+## Himno Nacional Mexicano
+
+- [`himno_mexicano/`](himno_mexicano/): v1, arreglo pentatónico aproximado en los nueve hilos.
+- [`himno_mexicano/v2/`](himno_mexicano/v2/): v2, versión fiel en **si bemol mayor** con armonía y bajo, en los hilos cromáticos y en un solo render. WAV y MP4 están en el release `himno-mexicano-v2`.
